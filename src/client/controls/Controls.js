@@ -8,16 +8,21 @@
 
 			_.extend(this, VIZI.Mediator);
 
+			this.enabled = undefined;
+
 			this.mouse = undefined;
 			this.keyboard = undefined;
 		};
 
-		Controls.prototype.init = function(camera) {
-			this.mouse = VIZI.Mouse.getInstance(camera);
-			this.keyboard = VIZI.Keyboard.getInstance();
+		Controls.prototype.init = function(domElement, camera, options) {
+			if (options.enable) {
+				this.mouse = VIZI.Mouse.getInstance(domElement, camera);
+				this.keyboard = VIZI.Keyboard.getInstance(domElement);
 
-			this.subscribe("update", this.onUpdate);
-			this.subscribe("orbitControlCap", this.orbitCapReset);
+				this.subscribe("update", this.onUpdate);
+				this.subscribe("orbitControlCap", this.orbitCapReset);
+			}
+			this.enabled = options.enable;
 
 			return Q.fcall(function() {});
 		};
@@ -32,12 +37,12 @@
 			}
 
 			// Pan
-			if (mouseState.buttons.left && !keyboardState.keys.leftShift) {
+			if (mouseState.buttons.left && !keyboardState.keys.shift) {
 				this.publish("panControl", mouseState.pos3dDelta);
 			}
 
 			// Orbit
-			if (mouseState.buttons.left && keyboardState.keys.leftShift) {
+			if ((mouseState.buttons.left && keyboardState.keys.shift) || mouseState.buttons.middle) {
 				this.publish("orbitControl", mouseState.downPos2dDelta, mouseState.camera.startTheta, mouseState.camera.startPhi);
 			}
 

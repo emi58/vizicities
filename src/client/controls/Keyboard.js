@@ -3,7 +3,7 @@
 	"use strict";
 
 	VIZI.Keyboard = (function() {
-		var Keyboard = function() {
+		var Keyboard = function(domElement) {
 			VIZI.Log("Inititialising mouse manager");
 
 			_.extend(this, VIZI.Mediator);
@@ -12,10 +12,11 @@
 				keys: {}
 			};
 
-			this.initDOMEvents();
+			this.initDOMEvents(domElement);
 		};
 
-		Keyboard.prototype.initDOMEvents = function() {
+		// TODO: Work out if domElement should be used instead of document
+		Keyboard.prototype.initDOMEvents = function(domElement) {
 			var self = this;
 
 			document.addEventListener("keydown", function(event) {
@@ -52,7 +53,7 @@
 
 			switch (keyCode) {
 				case 16:
-					key = "leftShift";
+					key = "shift";
 					break;
 				default:
 					key = false;
@@ -69,9 +70,9 @@
 
 			// Method for getting an instance. It returns 
 			// a singleton instance of a singleton object
-			getInstance: function() {
+			getInstance: function(domElement) {
 				if ( instance  ===  undefined )  {
-					instance = new Keyboard();
+					instance = new Keyboard(domElement);
 				}
 
 				return instance;

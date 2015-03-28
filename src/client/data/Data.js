@@ -1,4 +1,4 @@
-/* globals window, _, VIZI, Q, d3 */
+/* globals window, _, VIZI, THREE, Q, d3 */
 (function() {
 	"use strict";
 
@@ -14,12 +14,12 @@
 		// Cache
 		this.cache = new VIZI.Cache();
 
+		// Objects
+		this.objects = {};
+
 		// Use IDs of processed features to prevent duplication on tile boundaries
 		// TODO: Remove ids from here when they're manually removed from view
 		this.processedIds = {};
-
-		// Object manager
-		this.objectManager = new VIZI.ObjectManager();
 
 		// URL of data source
 		this.url = "";
@@ -32,13 +32,15 @@
 		// Default to roughly around 550m
 		this.dataTileSize = 0.005;
 
+		// Winding
+		this.clockwise = "cw";
+		this.counterClockwise = "ccw";
+
 		// Distance constants
 		this.YARD_TO_METER = 0.9144;
 		this.FOOT_TO_METER = 0.3048;
 		this.INCH_TO_METER = 0.0254;
 		this.METERS_PER_LEVEL = 3;
-
-		this.subscribe("gridUpdated", this.update);
 	};
 
 	VIZI.Data.prototype.load = function(url, parameters, cacheKey) {
@@ -46,10 +48,15 @@
 		var deferred = Q.defer();
 
 		// Check cache
-		// TODO: Process cached data but don't make XHR call
-		if (this.cache.get(cacheKey)) {
-			VIZI.Log("Skipping tile as already in cache:", cacheKey);
-			return;
+		// TODO: Work out why this causes a lock-up
+		// - Might need to use typed arrays
+		var cachedFeatures = this.cache.get(cacheKey);
+		if (cachedFeatures) {
+			VIZI.Log("Loading tile from cache:", cacheKey);
+			self.loadProcess(cachedFeatures, cacheKey).done(function() {
+				deferred.resolve();
+			});
+			return deferred.promise;
 		}
 
 		// Replace URL placeholders with parameter values
@@ -61,8 +68,6 @@
 		VIZI.Log("Requesting URL", url);
 
 		// Request data and fulfil promise
-		// TODO: Check that responses are being received asynchronously
-		//   - Not convinced as tile loader seems to deal with responses neartly in order
 		d3.json(url, function(error, data) {
 			VIZI.Log("Response for URL", url);
 			if (error) {
@@ -74,38 +79,14 @@
 					return;
 				}
 
-				var features = self.process(data);
+				var features = self.process(data, true);
 
 				// Add data to cache (including dupes on boundaries)
 				self.cache.add(cacheKey, features);
 				VIZI.Log("Added data to cache:", cacheKey);
 
-				var uniqueFeatures = [];
-
-				// Skip duplicate features
-				_.each(features, function(feature) {
-					if (self.processedIds[feature.id]) {
-						VIZI.Log("Skipping duplicated feature:", feature.id);
-						return;
-					}
-
-					self.processedIds[feature.id] = true;
-					uniqueFeatures.push(feature);
-				});
-
-				// End promise if no features left to render
-				if (uniqueFeatures.length === 0) {
-					VIZI.Log("No features left to pass to worker");
+				self.loadProcess(features, cacheKey).done(function() {
 					deferred.resolve();
-					return;
-				}
-
-				// TODO: Pass-through progress event
-				self.objectManager.processFeaturesWorker(uniqueFeatures).then(function() {
-					deferred.resolve();
-				}, undefined, function(progress) {
-					// Pass-through progress
-					deferred.notify(progress);
 				});
 			}
 		});
@@ -113,8 +94,62 @@
 		return deferred.promise;
 	};
 
+	VIZI.Data.prototype.loadProcess = function(features, cacheKey) {
+		var self = this;
+		var deferred = Q.defer();
+
+		var uniqueFeatures = [];
+
+		// Skip duplicate features
+		_.each(features, function(feature) {
+			// Skip if feature is undefined
+			if (!feature) {
+				VIZI.Log("Skipping undefined feature");
+				return;
+			}
+
+			var existingId = _.find(self.processedIds, function(featureIds) {
+				return (_.indexOf(featureIds, feature.id) === -1) ? false : true;
+			});
+
+			// TODO: Double-check that this is 100% correct as there are a lot of duplicated feature messages showing up
+			// TODO: Look into issue where this may prevent the promise from resolving
+			if (existingId) {
+				VIZI.Log("Skipping duplicated feature");
+				return;
+			}
+
+			if (!self.processedIds[cacheKey]) {
+				self.processedIds[cacheKey] = [];
+			}
+
+			self.processedIds[cacheKey].push(feature.id);
+			uniqueFeatures.push(feature);
+		});
+
+		// End promise if no features left to render
+		if (uniqueFeatures.length === 0) {
+			VIZI.Log("No features left to pass to worker");
+			deferred.resolve();
+			return;
+		}
+
+		// TODO: Pass-through progress event
+		self.generateFeatures(uniqueFeatures).then(function(mesh) {
+			// Store reference to mesh for tile
+			self.objects[cacheKey] = mesh;
+			deferred.resolve();
+		}, undefined, function(progress) {
+			// Pass-through progress
+			deferred.notify(progress);
+		});
+
+		return deferred.promise;
+	};
+
 	VIZI.Data.prototype.update = function() {};
 	VIZI.Data.prototype.process = function(data) {};
+	VIZI.Data.prototype.generateFeatures = function(uniqueFeatures) {};
 
 	VIZI.Data.prototype.checkDuplicateCoords = function(prev, current) {
 		var dupe = false;
@@ -125,6 +160,16 @@
 		});
 
 		return dupe;
+	};
+
+	// Enforce a polygon winding direcetion. Needed for proper backface culling.
+	VIZI.Data.prototype.makeWinding = function(points, direction) {
+		var winding = THREE.Shape.Utils.isClockWise(points) ? this.clockwise : this.counterClockwise;
+		if (winding === direction) {
+			return points;
+		} else {
+			return points.reverse();
+		}
 	};
 
 	// Convert string distance value into meters

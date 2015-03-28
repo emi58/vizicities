@@ -3,7 +3,7 @@
 	"use strict";
 
 	VIZI.Mouse = (function() {
-		var Mouse = function(camera) {
+		var Mouse = function(domElement, camera) {
 			VIZI.Log("Inititialising mouse manager");
 
 			_.extend(this, VIZI.Mediator);
@@ -32,27 +32,34 @@
 				}
 			};
 
-			this.initDOMEvents();
+			this.initDOMEvents(domElement);
 		};
 
-		Mouse.prototype.initDOMEvents = function() {
+		Mouse.prototype.initDOMEvents = function(domElement) {
 			var self = this;
 
-			document.addEventListener("mousedown", function(event) {
+			domElement.addEventListener("mousedown", function(event) {
 				self.onMouseDown(event);
 			}, false);
 
-			document.addEventListener("mousemove", function(event) {
+			domElement.addEventListener("mousemove", function(event) {
 				self.onMouseMove(event);
 			}, false);
 
-			document.addEventListener("mouseup", function(event) {
+			domElement.addEventListener("mouseup", function(event) {
 				self.onMouseUp(event);
 			}, false);
 
-			document.addEventListener("wheel", function(event) {
+			// Prefer wheel event, but fallback to mousewheel event if necessary
+			var wheel_event = "wheel"; 
+			if (window.onwheel === undefined) {
+				wheel_event = "mousewheel"; 
+			}
+
+			domElement.addEventListener(wheel_event, function(event) {
 				self.onMouseWheel(event);
 			}, false);
+
 		};
 
 		Mouse.prototype.onMouseDown = function(event) {
@@ -116,7 +123,7 @@
 			state.pos3d.y = pos3d.y;
 			state.pos3d.z = pos3d.z;
 
-			if (state.buttons.left) {
+			if (state.buttons.left || state.buttons.middle) {
 				state.downPos2dDelta.x = event.clientX - state.downPos2d.x;
 				state.downPos2dDelta.y = event.clientY - state.downPos2d.y;
 
@@ -152,8 +159,19 @@
 			event.preventDefault();
 
 			var state = this.state;
+
+			// Wheel event 
+			if (event.deltaY !== undefined) {
+
+				state.wheelDelta -= event.deltaY;
 			
-			state.wheelDelta -= event.deltaY;
+			// MouseWheel Event 
+			} else {
+
+				state.wheelDelta += event.wheelDeltaY;
+
+			}
+
 		};
 
 		Mouse.prototype.resetDelta = function() {
@@ -211,9 +229,9 @@
 
 			// Method for getting an instance. It returns 
 			// a singleton instance of a singleton object
-			getInstance: function(camera) {
+			getInstance: function(domElement, camera) {
 				if ( instance  ===  undefined )  {
-					instance = new Mouse(camera);
+					instance = new Mouse(domElement, camera);
 				}
 
 				return instance;

@@ -31,13 +31,17 @@ module.exports = function(grunt) {
 					'src/shared/vendor/fpsmeter.js',
 					'src/shared/vendor/moment.js',
 					'src/shared/vendor/simplify.js',
+					'src/shared/vendor/throat.js',
 					'src/client/Vizi.js',
 					'src/client/Log.js',
 					'src/client/Mediator.js',
+					'src/client/Animation.js',
 					'src/client/debug/Dat.js',
 					'src/client/debug/FPS.js',
 					'src/client/debug/RendererInfo.js',
 					'src/client/ui/Loading.js',
+					'src/client/ui/Attribution.js',
+					'src/client/ui/OSMEdit.js',
 					'src/client/Geo.js',
 					'src/client/City.js',
 					'src/client/Loop.js',
@@ -47,10 +51,9 @@ module.exports = function(grunt) {
 					'src/client/webgl/Camera.js',
 					'src/client/webgl/Renderer.js',
 					'src/client/objects/ObjectManager.js',
-					'src/client/objects/BuildingManager.js',
+					'src/client/objects/ObjectManagerOverpass.js',
 					'src/client/objects/Object.js',
 					'src/client/objects/Floor.js',
-					'src/client/objects/Building.js',
 					'src/client/data/Data.js',
 					'src/client/data/DataOverpass.js',
 					'src/client/Grid.js',
@@ -94,7 +97,7 @@ module.exports = function(grunt) {
 				files: [ 'Gruntfile.js', 'src/**', 'examples/**' ],
 				tasks: 'default',
 				options: {
-					livereload: true
+					livereload: 35730
 				}
 			}
 		},
@@ -102,6 +105,8 @@ module.exports = function(grunt) {
 			server: {
 				options: {
 					port: port,
+					// change hostname to 0.0.0.0 to open it up
+					hostname: 'localhost',
 					base: '.',
 					keepalive: true,
 					debug: true

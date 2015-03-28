@@ -23,8 +23,9 @@
 
 		// floorContainer.add(floorWire);
 
-		var floorGeom = new THREE.PlaneGeometry(20000, 20000, 4, 4);
-		var floorMat = new THREE.MeshBasicMaterial({color: 0xffffff});
+		// var floorGeom = new THREE.PlaneGeometry(40000, 40000, 4, 4);
+		var floorGeom = new THREE.CircleGeometry(20000, 32);
+		var floorMat = new THREE.MeshBasicMaterial({color: 0xf8f8f8});
 		var floor = new THREE.Mesh(floorGeom, floorMat);
 		floor.position.y = -0.4;
 		floor.rotation.x = - 90 * Math.PI / 180;

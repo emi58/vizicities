@@ -2,39 +2,44 @@
 
 <html>
 <head>
-	<meta charset="utf-8">
-	<title>ViziCities Architecture Example</title>
+  <meta charset="utf-8">
+  <title>ViziCities Demo</title>
 
-	<link href="reset.css" rel="stylesheet" type="text/css">
+  <link href="reset.css" rel="stylesheet" type="text/css">
 
-	<link href="../css/loading.css" rel="stylesheet" type="text/css">
-	
-	<style type="text/css">
-		html, body {
-			height: 100%;
-			overflow: hidden;
-		}
+  <link href="../css/vizicities.css" rel="stylesheet" type="text/css">
+  <link href="../css/loading.css" rel="stylesheet" type="text/css">
+  
+  <style type="text/css">
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
 
-		body {
-			background: #ccc;
-		}
-	</style>
+    body {
+      background: #ccc;
+    }
+  </style>
 </head>
 <body>
+  <div id="vizicities-container"></div>
 
-	<script src="../build/vizi.js"></script>
+  <script src="../build/vizi.js"></script>
 
-	<script>
-		// Debug output
-		VIZI.DEBUG = false;
+  <script>
+    // Debug output
+    VIZI.DEBUG = false;
 
-		var city = new VIZI.City();
-		city.init({
-			coords: [-0.01924, 51.50358] // Canary Wharf
-			// coords: [-0.1159894466, 51.5045487479] // London Eye
-			// coords: [-73.984762, 40.7516199] // NYC (performance-heavy)
-		});
-	</script>
+    VIZI.ENABLE_OUTLINES = false;
+    VIZI.ENABLE_ROADS = true;
+
+    var city = new VIZI.City();
+    city.init({
+      coords: [-0.01924, 51.50358], // Canary Wharf
+      domElement: document.getElementById("vizicities-container"),
+      overpassGridUpdate: true
+    });
+  </script>
 
 </body>
 </html>

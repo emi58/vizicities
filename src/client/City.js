@@ -12,9 +12,14 @@
 		this.fps = undefined;
 		this.rendererInfo = undefined;
 
+		// Options
+		this.options = undefined;
+
 		// UI
 		this.ui = {};
 		this.ui.loading = undefined;
+		this.ui.attribution = undefined;
+		this.ui.osmEdit = undefined;
 
 		// Geo methods
 		this.geo = undefined;
@@ -28,7 +33,8 @@
 		// Basic WebGL components (scene, camera, renderer, lights, etc)
 		this.webgl = undefined;
 
-		// DOM events (window resize, etc)
+		// DOM - elements and events (window resize, etc)
+		this.domElement = undefined;
 		this.domEvents = undefined;
 
 		// Controls (mouse, keyboard, Leap, etc)
@@ -41,6 +47,8 @@
 		this.loop = undefined;
 
 		this.publish("addToDat", this, {name: "City", properties: ["init"]});
+
+		this.subscribe("hashchange", this.onHashchange);
 	};
 
 	VIZI.City.prototype.init = function(options) {
@@ -49,12 +57,28 @@
 		var startTime = Date.now();
 		var self = this;
 
+		var deferred = Q.defer();
+
 		if (!options) {
 			options = {};
 		}
 
+		self.options = options;
+
+		var hash = window.location.hash.replace('#', '');
+		var coordCheck = /^(\-?\d+(\.\d+)?),(\-?\d+(\.\d+)?)$/;
+		if (coordCheck.test(hash)) {
+			options.coords = hash.split(',').reverse();
+		}
+
 		_.defaults(options, {
-			coords: [-0.01924, 51.50358]
+			coords: [-0.01924, 51.50358],
+			capZoom: true,
+			capOrbit: true,
+			overpass: true,
+			overpassGridUpdate: true,
+			overpassWayIntersect: false,
+			controls: { enable: true }
 		});
 
 		// Output city options
@@ -65,21 +89,37 @@
 			center: options.coords
 		});
 
+		// Store DOM reference
+		self.domElement = self.options.domElement;
+
 		// Load city using promises
 
 		self.publish("loadingProgress", 0);
 
 		// Initialise loading UI
-		this.initLoadingUI().then(function() {
+		self.initLoadingUI().then(function() {
 			self.publish("loadingProgress", 0.1);
 
 			// Initialise debug tools
 			return self.initDebug();
 		}).then(function() {
-			self.publish("loadingProgress", 0.2);
+			self.publish("loadingProgress", 0.15);
+
+			// Initialise attribution and OSM edit UI
+			var promises = [];
+
+			// Initialise DOM events
+			promises.push(self.initAttributionUI());
+
+			// Initialise controls
+			promises.push(self.initOSMEditUI());
+
+			return Q.allSettled(promises);
+		}).then(function() {
+			self.publish("loadingProgress", 0.25);
 
 			// Initialise WebGL
-			return self.initWebGL();
+			return self.initWebGL(options);
 		}).then(function() {
 			self.publish("loadingProgress", 0.3);
 
@@ -100,9 +140,6 @@
 		}).then(function() {
 			self.publish("loadingProgress", 0.5);
 
-			// Set up data loader
-			self.data = new VIZI.DataOverpass();
-
 			// TODO: Work out a way to use progress event of each promises to increment loading progress
 			// Perhaps by looping through each promises individually and working out progress fraction by num. of promises / amount processed
 
@@ -113,7 +150,13 @@
 			promises.push(self.loadCoreObjects());
 
 			// Load data from the OSM Overpass API
-			promises.push(self.loadOverpass());
+			// Set up data loader
+			if (options.overpass) {
+				self.data = new VIZI.DataOverpass({
+					gridUpdate: options.overpassGridUpdate
+				});
+				promises.push(self.loadOverpass(options.overpassWayIntersect));
+			}
 
 			return Q.allSettled(promises);
 		}).then(function (results) {
@@ -124,7 +167,43 @@
 			self.publish("loadingComplete");
 
 			VIZI.Log("Finished loading city in " + (Date.now() - startTime) + "ms");
+
+			deferred.resolve();
 		});
+
+		return deferred.promise;
+	};
+
+	VIZI.City.prototype.initAttributionUI = function() {
+		var startTime = Date.now();
+
+		var deferred = Q.defer();
+
+		this.ui.attribution = new VIZI.Attribution();
+
+		this.ui.attribution.init().then(function(result) {
+			VIZI.Log("Finished intialising attribution UI in " + (Date.now() - startTime) + "ms");
+
+			deferred.resolve();
+		});
+
+		return deferred.promise;
+	};
+
+	VIZI.City.prototype.initOSMEditUI = function() {
+		var startTime = Date.now();
+
+		var deferred = Q.defer();
+
+		this.ui.osmEdit = new VIZI.OSMEdit();
+
+		this.ui.osmEdit.init().then(function(result) {
+			VIZI.Log("Finished intialising OSM edit UI in " + (Date.now() - startTime) + "ms");
+
+			deferred.resolve();
+		});
+
+		return deferred.promise;
 	};
 
 	VIZI.City.prototype.initLoadingUI = function() {
@@ -134,7 +213,7 @@
 
 		this.ui.loading = new VIZI.Loading();
 
-		this.ui.loading.init().then(function(result) {
+		this.ui.loading.init(this.domElement).then(function(result) {
 			VIZI.Log("Finished intialising loading UI in " + (Date.now() - startTime) + "ms");
 
 			deferred.resolve();
@@ -160,14 +239,14 @@
 	};
 
 	// TODO: Move set up of core objects out to somewhere else
-	VIZI.City.prototype.initWebGL = function() {
+	VIZI.City.prototype.initWebGL = function(options) {
 		var startTime = Date.now();
 
 		var deferred = Q.defer();
 		
 		this.webgl = new VIZI.WebGL();
 
-		this.webgl.init(this.geo.centerPixels).then(function(result) {
+		this.webgl.init(this.domElement, this.geo.centerPixels, options.capZoom, options.capOrbit).then(function(result) {
 			VIZI.Log("Finished intialising WebGL in " + (Date.now() - startTime) + "ms");
 
 			deferred.resolve();
@@ -199,7 +278,7 @@
 
 		this.controls = VIZI.Controls.getInstance();
 
-		this.controls.init(this.webgl.camera).then(function(result) {
+		this.controls.init(this.domElement, this.webgl.camera, this.options.controls).then(function(result) {
 			VIZI.Log("Finished intialising controls in " + (Date.now() - startTime) + "ms");
 
 			deferred.resolve();
@@ -238,18 +317,30 @@
 		return Q.fcall(function() {});
 	};
 
-	VIZI.City.prototype.loadOverpass = function() {
+	VIZI.City.prototype.loadOverpass = function(wayIntersect) {
 		VIZI.Log("Loading data from OSM Overpass API");
 
 		var startTime = Date.now();
 
-		var deferred = Q.defer();
+		// var deferred = Q.defer();
 
-		this.data.update().done(function() {
-			VIZI.Log("Finished loading Overpass data in " + (Date.now() - startTime) + "ms");
-			deferred.resolve();
-		});
+		if (wayIntersect) {
+			this.data.updateByWayIntersect(wayIntersect).done(function() {
+				VIZI.Log("Finished loading Overpass data using way intersection in " + (Date.now() - startTime) + "ms");
+			});
+		} else {
+			this.data.update().done(function() {
+				VIZI.Log("Finished loading Overpass data in " + (Date.now() - startTime) + "ms");
+				// deferred.resolve();
+			});
+		}
 
-		return deferred.promise;
+		// return deferred.promise;
+		return Q.fcall(function() {});
 	};
+
+	VIZI.City.prototype.onHashchange = function(){
+		window.location.reload();
+	};
+
 }());
